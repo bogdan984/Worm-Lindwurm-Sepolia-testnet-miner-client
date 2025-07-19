@@ -17,7 +17,7 @@ A user-friendly command-line interface for installing, managing, and interacting
 Run the script directly from your terminal using the following command. This will launch the interactive menu without needing to clone the repository.
 
 ```bash
-curl -sSL [https://raw.githubusercontent.com/scarletbright/Worm-Lindwurm-Sepolia-testnet-miner-client/refs/heads/main/worm-lindwurm-testnet-miner-cli.sh](https://raw.githubusercontent.com/scarletbright/Worm-Lindwurm-Sepolia-testnet-miner-client/refs/heads/main/worm-lindwurm-testnet-miner-cli.sh) | bash
+curl -sSL https://raw.githubusercontent.com/scarletbright/Worm-Lindwurm-Sepolia-testnet-miner-client/main/worm-lindwurm-testnet-miner-cli.sh | bash
 ```
 ## Menu Commands Explained
 1. **Install Miner & Start Service:** Installs all dependencies, compiles the miner, securely saves your private key, and starts the miner as a background service (systemd).
