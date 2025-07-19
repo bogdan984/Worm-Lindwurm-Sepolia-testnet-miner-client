@@ -37,7 +37,7 @@ curl -sSL https://raw.githubusercontent.com/scarletbright/Worm-Lindwurm-Sepolia-
 1. **Exit:** Closes the tool.
 
 ## Requirements
-**Server:** A dedicated cloud server (VPS) is recommended for stable 24/7 mining.
+**Server:** the machine with 16gb of RAM is only needed for the burn phase. After that you can just run the miner with a very typical VPS server
 
 **OS:** Ubuntu / Debian.
 
