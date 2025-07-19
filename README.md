@@ -51,3 +51,13 @@ curl -sSL https://raw.githubusercontent.com/scarletbright/Worm-Lindwurm-Sepolia-
 **Always use a fresh wallet created specifically for this testnet.**
 
 ### Do Not Reuse Mainnet Keys: never use a private key from a mainnet wallet that holds real assets.
+
+## Sepolia ETH faucets:
+
+* [Google Sepolia faucet](https://cloud.google.com/application/web3/faucet/ethereum/sepolia)
+
+* [Alchemy Sepolia faucet](https://www.alchemy.com/faucets/ethereum-sepolia)
+
+* [Sepolia PoW Faucet](https://sepolia-faucet.pk910.de)
+
+* [Getblock Sepolia Faucet](https://getblock.io/faucet/eth-sepolia/)
