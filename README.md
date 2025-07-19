@@ -24,7 +24,7 @@ curl -sSL https://raw.githubusercontent.com/scarletbright/Worm-Lindwurm-Sepolia-
 
 1. **Burn ETH for BETH:** Burns testnet ETH to get Burnt ETH (BETH), which is used by the miner to participate in mining epochs.
 
-1. **Check Balances:** Displays current epoch, your wallet's current BETH, and WORM token balances on the Sepolia testne and Claimable WORM (10 last epochs).
+1. **Check Balances:** Displays current epoch, your wallet's current BETH, and WORM token balances on the Sepolia testnet and Claimable WORM (10 last epochs).
 
 1. **Update Miner:** Pulls the latest code from the official repository, rebuilds the miner binary with optimizations, and restarts the background service.
 
