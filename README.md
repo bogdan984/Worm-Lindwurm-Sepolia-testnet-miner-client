@@ -50,4 +50,4 @@ curl -sSL https://raw.githubusercontent.com/scarletbright/Worm-Lindwurm-Sepolia-
 
 **Always use a fresh wallet created specifically for this testnet.**
 
-###Do Not Reuse Mainnet Keys: never use a private key from a mainnet wallet that holds real assets.
+### Do Not Reuse Mainnet Keys: never use a private key from a mainnet wallet that holds real assets.
