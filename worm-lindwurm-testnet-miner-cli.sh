@@ -15,6 +15,16 @@ miner_dir="$HOME/miner"
 log_file="$log_dir/miner.log"
 key_file="$log_dir/private.key"
 worm_miner_bin="$HOME/.cargo/bin/worm-miner"
+fastest_rpc_file="$log_dir/fastest_rpc.log"
+
+# A more reliable list of RPCs to test
+sepolia_rpcs=(
+    "https://sepolia.gateway.tenderly.co"
+    "https://sepolia.drpc.org"
+    "https://ethereum-sepolia-rpc.publicnode.com"
+    "https://eth-sepolia.public.blastapi.io"
+    "https://eth-sepolia-public.unifra.io"
+)
 
 # Helper: Get private key from user file
 get_private_key() {
@@ -28,6 +38,31 @@ get_private_key() {
     return 1
   fi
   echo "$private_key"
+}
+
+# Find the fastest RPC
+find_fastest_rpc() {
+    echo -e "${GREEN}[*] Finding the fastest Sepolia RPC...${NC}"
+    fastest_rpc=""
+    min_latency=999999
+
+    for rpc in "${sepolia_rpcs[@]}"; do
+        # Use --max-time to prevent hangs on unresponsive RPCs
+        latency=$(curl -o /dev/null --connect-timeout 5 --max-time 10 -s -w "%{time_total}" "$rpc" || echo "999999")
+        echo -e "Testing RPC: $rpc | Latency: ${YELLOW}$latency${NC} seconds"
+        if (( $(echo "$latency < $min_latency" | bc -l) && $(echo "$latency > 0" | bc -l) )); then
+            min_latency=$latency
+            fastest_rpc=$rpc
+        fi
+    done
+
+    if [ -n "$fastest_rpc" ]; then
+        echo "$fastest_rpc" > "$fastest_rpc_file"
+        echo -e "${GREEN}[+] Fastest RPC set to: $fastest_rpc with latency: $min_latency seconds.${NC}"
+    else
+        echo -e "${RED}Error: Could not determine the fastest RPC. Please check your network connection.${NC}"
+        exit 1
+    fi
 }
 
 # Main Menu Loop
@@ -51,15 +86,16 @@ EOL
   echo "5. Uninstall Miner"
   echo "6. Claim WORM Rewards"
   echo "7. View Miner Logs"
-  echo "8. Exit"
+  echo "8. Find & Set Fastest RPC"
+  echo "9. Exit"
   echo -e "${GREEN}------------------------${NC}"
-  read -p "Enter choice [1-8]: " action
+  read -p "Enter choice [1-9]: " action
 
   case $action in
     1)
       echo -e "${GREEN}[*] Installing dependencies...${NC}"
       sudo apt-get update && sudo apt-get install -y \
-        build-essential cmake git curl wget unzip \
+        build-essential cmake git curl wget unzip bc \
         libgmp-dev libsodium-dev nasm nlohmann-json3-dev
 
       if ! command -v cargo &>/dev/null; then
@@ -100,6 +136,8 @@ EOL
       mkdir -p "$log_dir"
       touch "$log_file"
 
+      find_fastest_rpc
+
       private_key=""
       while true; do
         read -sp "Enter your private key (e.g., 0x...): " private_key
@@ -119,9 +157,11 @@ EOL
       tee "$miner_dir/start-miner.sh" > /dev/null <<EOL
 #!/bin/bash
 PRIVATE_KEY=\$(cat "$key_file")
+FASTEST_RPC=\$(cat "$fastest_rpc_file")
 exec "$worm_miner_bin" mine \\
   --network sepolia \\
   --private-key "\$PRIVATE_KEY" \\
+  --custom-rpc "\$FASTEST_RPC" \\
   --min-beth-per-epoch 0.0001 \\
   --max-beth-per-epoch 0.01 \\
   --assumed-worm-price 0.000002 \\
@@ -158,45 +198,51 @@ EOL
       echo -e "${GREEN}[*] Burning ETH for BETH${NC}"
       private_key=$(get_private_key) || exit 1
 
+      if [ ! -f "$fastest_rpc_file" ]; then
+        find_fastest_rpc
+      fi
+      fastest_rpc=$(cat "$fastest_rpc_file")
+
       amount=""
       while true; do
         read -p "Enter ETH amount to burn (e.g., 0.1, max 1): " amount
-        if [[ "$amount" =~ ^[0-9]*\.[0-9]{1,18}$ ]] && (( $(echo "$amount > 0 && $amount <= 1" | bc -l) )); then
+        if [[ "$amount" =~ ^[0-9.]+$ ]] && (( $(echo "$amount > 0 && $amount <= 1" | bc -l) )); then
           break
         else
-          echo -e "${YELLOW}Invalid amount. Must be a number > 0 and <= 1 with 1-18 decimal places.${NC}"
+          echo -e "${YELLOW}Invalid amount. Must be a number > 0 and <= 1.${NC}"
         fi
       done
 
       fee=""
       while true; do
         read -p "Enter burn fee (e.g., 0.001 ETH): " fee
-        if [[ "$fee" =~ ^[0-9]*\.[0-9]{1,18}$ ]] && (( $(echo "$fee >= 0" | bc -l) )); then
-          spend=$(echo "$amount - $fee" | bc -l)
+        if [[ "$fee" =~ ^[0-9.]+$ ]] && (( $(echo "$fee >= 0" | bc -l) )); then
+          spend=$(echo "$amount - $fee" | bc)
           if (( $(echo "$spend >= 0" | bc -l) )); then
             break
           else
-            echo -e "${YELLOW}Amount is too low after fee. Spendable amount must be at least 0 ETH.${NC}"
+            echo -e "${YELLOW}Fee cannot be greater than the burn amount.${NC}"
           fi
         else
-          echo -e "${YELLOW}Invalid fee. Must be a number >= 0 with 1-18 decimal places.${NC}"
+          echo -e "${YELLOW}Invalid fee. Must be a positive number.${NC}"
         fi
       done
 
-      wallet_address=$("$worm_miner_bin" info --network sepolia --private-key "$private_key" | grep "burn-address" | awk '{print $4}')
+      wallet_address=$($worm_miner_bin info --network sepolia --private-key "$private_key" --custom-rpc "$fastest_rpc" | grep "burn-address" | awk '{print $4}')
       echo -e "${BOLD}Burning... | Fee: $fee ETH | Spend: $spend ETH | Receiver: $wallet_address${NC}"
-      
+
       cd "$miner_dir"
       "$worm_miner_bin" burn \
         --network sepolia \
         --private-key "$private_key" \
+        --custom-rpc "$fastest_rpc" \
         --amount "$amount" \
         --fee "$fee" \
         --spend "$spend"
 
       if [ ! -s "input.json" ] || [ ! -s "witness.wtns" ]; then
         echo -e "${YELLOW}Error: Proof files (input.json, witness.wtns) not found or empty.${NC}"
-        echo -e "${YELLOW}Check miner logs for details: tail -n 10 $log_file${NC}"
+        echo -e "${YELLOW}Check miner output for details.${NC}"
       else
         echo -e "${GREEN}[+] Burn completed. Proof files generated in $miner_dir.${NC}"
       fi
@@ -204,7 +250,13 @@ EOL
     3)
       echo -e "${GREEN}[*] Checking Balances...${NC}"
       private_key=$(get_private_key) || exit 1
-      "$worm_miner_bin" info --network sepolia --private-key "$private_key"
+
+      if [ ! -f "$fastest_rpc_file" ]; then
+        find_fastest_rpc
+      fi
+      fastest_rpc=$(cat "$fastest_rpc_file")
+
+      "$worm_miner_bin" info --network sepolia --private-key "$private_key" --custom-rpc "$fastest_rpc"
       ;;
     4)
       echo -e "${GREEN}[*] Updating Miner...${NC}"
@@ -214,13 +266,16 @@ EOL
       fi
       cd "$miner_dir"
       git pull origin main
-      echo -e "${GREEN}[*] Building and installing optimized miner binary...${NC}"
+      echo -e "${GREEN}[*] Building and installing miner binary...${NC}"
       cargo clean
       RUSTFLAGS="-C target-cpu=native" cargo install --path .
       if [ ! -f "$worm_miner_bin" ]; then
         echo -e "${RED}Error: Miner binary not found at $worm_miner_bin. Update failed.${NC}"
         exit 1
       fi
+
+      find_fastest_rpc
+
       sudo systemctl restart worm-miner
       echo -e "${GREEN}[+] Miner updated and restarted successfully.${NC}"
       ;;
@@ -236,13 +291,19 @@ EOL
     6)
       echo -e "${GREEN}[*] Claiming WORM Rewards...${NC}"
       private_key=$(get_private_key) || exit 1
+
+      if [ ! -f "$fastest_rpc_file" ]; then
+        find_fastest_rpc
+      fi
+      fastest_rpc=$(cat "$fastest_rpc_file")
+
       read -p "Enter starting epoch (e.g., 0): " from_epoch
       read -p "Enter number of epochs to claim (e.g., 10): " num_epochs
       if [[ ! "$from_epoch" =~ ^[0-9]+$ ]] || [[ ! "$num_epochs" =~ ^[0-9]+$ ]]; then
         echo -e "${YELLOW}Error: Epoch values must be non-negative integers.${NC}"
         continue
       fi
-      "$worm_miner_bin" claim --network sepolia --private-key "$private_key" --from-epoch "$from_epoch" --num-epochs "$num_epochs"
+      "$worm_miner_bin" claim --network sepolia --private-key "$private_key" --custom-rpc "$fastest_rpc" --from-epoch "$from_epoch" --num-epochs "$num_epochs"
       echo -e "${GREEN}[+] WORM reward claim process finished.${NC}"
       ;;
     7)
@@ -254,11 +315,15 @@ EOL
       fi
       ;;
     8)
+      echo -e "${GREEN}[*] Finding and setting the fastest RPC...${NC}"
+      find_fastest_rpc
+      ;;
+    9)
       echo -e "${GREEN}[*] Exiting...${NC}"
       exit 0
       ;;
     *)
-      echo -e "${YELLOW}Invalid choice. Please enter a number from 1 to 8.${NC}"
+      echo -e "${YELLOW}Invalid choice. Please enter a number from 1 to 9.${NC}"
       ;;
     esac
 
