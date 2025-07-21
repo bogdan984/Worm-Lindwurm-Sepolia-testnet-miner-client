@@ -5,6 +5,8 @@
 
 A user-friendly command-line interface for installing, managing, and interacting with the Worm Privacy miner on the Sepolia testnet.
 
+![Worm Miner Tool UI](./worm-miner.png)
+
 -----
 
 ## Official Links
