@@ -60,8 +60,7 @@ EOL
       echo -e "${GREEN}[*] Installing dependencies...${NC}"
       sudo apt-get update && sudo apt-get install -y \
         build-essential cmake git curl wget unzip \
-        libgmp-dev libsodium-dev nasm nlohmann-json3-dev \
-        pkg-config libssl-dev
+        libgmp-dev libsodium-dev nasm nlohmann-json3-dev
 
       if ! command -v cargo &>/dev/null; then
         echo -e "${GREEN}[*] Installing Rust toolchain...${NC}"
@@ -157,7 +156,7 @@ EOL
       ;;
     2)
       echo -e "${GREEN}[*] Burning ETH for BETH${NC}"
-      private_key=$(get_private_key)
+      private_key=$(get_private_key) || exit 1
 
       amount=""
       while true; do
@@ -171,20 +170,20 @@ EOL
 
       fee=""
       while true; do
-        read -p "Enter burn fee (e.g., 0.0001 ETH): " fee
-        if [[ "$fee" =~ ^[0-9]*\.[0-9]{1,18}$ ]] && (( $(echo "$fee >= 0.0001" | bc -l) )); then
+        read -p "Enter burn fee (e.g., 0.001 ETH): " fee
+        if [[ "$fee" =~ ^[0-9]*\.[0-9]{1,18}$ ]] && (( $(echo "$fee >= 0" | bc -l) )); then
           spend=$(echo "$amount - $fee" | bc -l)
-          if (( $(echo "$spend >= 0.0001" | bc -l) )); then
+          if (( $(echo "$spend >= 0" | bc -l) )); then
             break
           else
-            echo -e "${YELLOW}Amount is too low after fee. Spendable amount must be at least 0.0001 ETH.${NC}"
+            echo -e "${YELLOW}Amount is too low after fee. Spendable amount must be at least 0 ETH.${NC}"
           fi
         else
-          echo -e "${YELLOW}Invalid fee. Must be a number >= 0.0001 with 1-18 decimal places.${NC}"
+          echo -e "${YELLOW}Invalid fee. Must be a number >= 0 with 1-18 decimal places.${NC}"
         fi
       done
 
-      wallet_address=$("$worm_miner_bin" info --network sepolia --private-key "$private_key" | grep "Address" | awk '{print $2}')
+      wallet_address=$("$worm_miner_bin" info --network sepolia --private-key "$private_key" | grep "burn-address" | awk '{print $4}')
       echo -e "${BOLD}Burning... | Fee: $fee ETH | Spend: $spend ETH | Receiver: $wallet_address${NC}"
       
       cd "$miner_dir"
@@ -204,7 +203,7 @@ EOL
       ;;
     3)
       echo -e "${GREEN}[*] Checking Balances...${NC}"
-      private_key=$(get_private_key)
+      private_key=$(get_private_key) || exit 1
       "$worm_miner_bin" info --network sepolia --private-key "$private_key"
       ;;
     4)
@@ -227,8 +226,8 @@ EOL
       ;;
     5)
       echo -e "${GREEN}[*] Uninstalling Miner...${NC}"
-      sudo systemctl stop worm-miner
-      sudo systemctl disable worm-miner
+      sudo systemctl stop worm-miner || true
+      sudo systemctl disable worm-miner || true
       sudo rm -f /etc/systemd/system/worm-miner.service
       sudo systemctl daemon-reload
       rm -rf "$log_dir" "$miner_dir" "$worm_miner_bin"
@@ -236,8 +235,14 @@ EOL
       ;;
     6)
       echo -e "${GREEN}[*] Claiming WORM Rewards...${NC}"
-      private_key=$(get_private_key)
-      "$worm_miner_bin" claim --network sepolia --private-key "$private_key" --epochs-to-check 10
+      private_key=$(get_private_key) || exit 1
+      read -p "Enter starting epoch (e.g., 0): " from_epoch
+      read -p "Enter number of epochs to claim (e.g., 10): " num_epochs
+      if [[ ! "$from_epoch" =~ ^[0-9]+$ ]] || [[ ! "$num_epochs" =~ ^[0-9]+$ ]]; then
+        echo -e "${YELLOW}Error: Epoch values must be non-negative integers.${NC}"
+        continue
+      fi
+      "$worm_miner_bin" claim --network sepolia --private-key "$private_key" --from-epoch "$from_epoch" --num-epochs "$num_epochs"
       echo -e "${GREEN}[+] WORM reward claim process finished.${NC}"
       ;;
     7)
